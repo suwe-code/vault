@@ -80,7 +80,7 @@ public final class AppModel: ObservableObject {
         busy = true; setStatus("Checking")
         Task {
             do {
-                let key = try DeviceKeychain.loadSecretKey(vaultID: file.header.vaultID, reason: "Unlock VAULT")
+                let key = try await releaseSecretKey(vaultID: file.header.vaultID, reason: "Unlock VAULT")
                 try await finishUnlock(file: file, password: password, secretKey: key)
             } catch VaultError.notEnrolled {
                 setStatus("This device is not enrolled. Enter the secret key.", error: true)
@@ -300,7 +300,7 @@ public final class AppModel: ObservableObject {
                 guard incoming.header.vaultID == v.header.vaultID else {
                     setStatus("That file belongs to a different vault", error: true); busy = false; return
                 }
-                let key = try DeviceKeychain.loadSecretKey(vaultID: v.header.vaultID, reason: "Import into VAULT")
+                let key = try await releaseSecretKey(vaultID: v.header.vaultID, reason: "Import into VAULT")
                 let summary = try await Task.detached(priority: .userInitiated) { () -> MergeSummary in
                     try v.merge(file: incoming, password: password, secretKey: key)
                 }.value
@@ -331,7 +331,7 @@ public final class AppModel: ObservableObject {
         let file = lockedFile
         Task {
             do {
-                let key = try DeviceKeychain.loadSecretKey(vaultID: v.header.vaultID, reason: "Change VAULT password")
+                let key = try await releaseSecretKey(vaultID: v.header.vaultID, reason: "Change VAULT password")
                 guard let file else { throw VaultError.corruptFile }
                 let re = try await Task.detached(priority: .userInitiated) { () -> OpenVault in
                     _ = try OpenVault.unlock(file: file, password: current, secretKey: key)   // proves the current password
@@ -346,9 +346,16 @@ public final class AppModel: ObservableObject {
     }
 
     /// Shows the key card again. Biometrics required.
-    public func revealSecretKey() -> SecretKey? {
+    public func revealSecretKey() async -> SecretKey? {
         guard let id = vaultID else { return nil }
-        return try? DeviceKeychain.loadSecretKey(vaultID: id, reason: "Show VAULT secret key")
+        return try? await releaseSecretKey(vaultID: id, reason: "Show VAULT secret key")
+    }
+
+    /// The biometric prompt blocks the calling thread, so it never runs on the main actor.
+    private func releaseSecretKey(vaultID: UUID, reason: String) async throws -> SecretKey {
+        try await Task.detached(priority: .userInitiated) {
+            try DeviceKeychain.loadSecretKey(vaultID: vaultID, reason: reason)
+        }.value
     }
 
     public func resetOneTimeCode() -> TOTP? {

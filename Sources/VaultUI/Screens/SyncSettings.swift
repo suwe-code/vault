@@ -124,7 +124,7 @@ struct SettingsModule: View {
                             OpsButton("Hide") { shownKey = nil }
                         }
                     } else {
-                        OpsButton("Show key card") { shownKey = model.revealSecretKey() }
+                        OpsButton("Show key card") { Task { shownKey = await model.revealSecretKey() } }
                     }
                 }
 

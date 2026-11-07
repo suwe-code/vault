@@ -1,0 +1,105 @@
+name: Vault
+options:
+  bundleIdPrefix: com.suwe
+  deploymentTarget:
+    macOS: "14.0"
+    iOS: "17.0"
+  createIntermediateGroups: true
+  xcodeVersion: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Free personal team: Xcode fills DEVELOPMENT_TEAM when you pick it under Signing.
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_HARDENED_RUNTIME: YES
+    DEAD_CODE_STRIPPING: YES
+packages:
+  VaultPackage:
+    path: .
+targets:
+  VAULT:
+    type: application
+    platform: macOS
+    sources:
+      - path: Apps/Shared
+      - path: Apps/macOS
+    dependencies:
+      - package: VaultPackage
+        product: VaultUI
+    info:
+      path: Apps/macOS/Info.plist
+      properties:
+        CFBundleDisplayName: VAULT
+        CFBundleName: VAULT
+        LSApplicationCategoryType: public.app-category.utilities
+        LSMinimumSystemVersion: "14.0"
+        NSHumanReadableCopyright: ""
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Vault File
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Owner
+            LSItemContentTypes: [com.suwe.vault.file]
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: com.suwe.vault.file
+            UTTypeDescription: Vault File
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [vault]
+    entitlements:
+      path: Apps/macOS/VAULT.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.files.user-selected.read-write: true
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.suwe.vault
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.suwe.vault
+        PRODUCT_NAME: VAULT
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  VAULT-iOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: Apps/Shared
+      - path: Apps/iOS
+    dependencies:
+      - package: VaultPackage
+        product: VaultUI
+    info:
+      path: Apps/iOS/Info.plist
+      properties:
+        CFBundleDisplayName: VAULT
+        CFBundleName: VAULT
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIRequiresFullScreen: true
+        NSFaceIDUsageDescription: VAULT uses Face ID to release the secret key that unlocks your vault.
+        LSSupportsOpeningDocumentsInPlace: false
+        UIFileSharingEnabled: false
+        ITSAppUsesNonExemptEncryption: false
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Vault File
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Owner
+            LSItemContentTypes: [com.suwe.vault.file]
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: com.suwe.vault.file
+            UTTypeDescription: Vault File
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [vault]
+    entitlements:
+      path: Apps/iOS/VAULT-iOS.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.suwe.vault
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.suwe.vault
+        PRODUCT_NAME: VAULT
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

@@ -296,7 +296,19 @@ public final class AppModel: ObservableObject {
             do {
                 let accessed = fileURL.startAccessingSecurityScopedResource()
                 defer { if accessed { fileURL.stopAccessingSecurityScopedResource() } }
-                let incoming = try VaultFile.parse(try Data(contentsOf: fileURL))
+                let raw = try Data(contentsOf: fileURL)
+                // Plain JSON list of cards (no encryption, no vault id). Used to bulk-add cards.
+                if let plain = Self.decodePlainCards(raw) {
+                    let summary = v.merge(payload: VaultPayload(items: plain))
+                    vault = v
+                    try persist()
+                    lastImport = (Date(), summary)
+                    pendingImportURL = nil
+                    setStatus("Added \(summary.added) card\(summary.added == 1 ? "" : "s")")
+                    busy = false
+                    return
+                }
+                let incoming = try VaultFile.parse(raw)
                 guard incoming.header.vaultID == v.header.vaultID else {
                     setStatus("That file belongs to a different vault", error: true); busy = false; return
                 }
@@ -313,6 +325,24 @@ public final class AppModel: ObservableObject {
                 setStatus(error.localizedDescription, error: true)
             }
             busy = false
+        }
+    }
+
+    /// A `.json` array of cards. Dates are milliseconds since 1970 and optional.
+    private static func decodePlainCards(_ data: Data) -> [VaultItem]? {
+        guard data.first == UInt8(ascii: "[") || data.first == UInt8(ascii: "{") else { return nil }
+        let dec = JSONDecoder(); dec.dateDecodingStrategy = .millisecondsSince1970
+        if let items = try? dec.decode([VaultItem].self, from: data) { return items }
+        return (try? dec.decode([PlainCard].self, from: data))?.map { $0.item }
+    }
+
+    private struct PlainCard: Decodable {
+        struct F: Decodable { var label: String; var value: String; var kind: FieldKind? }
+        var title: String; var category: ItemCategory?; var fields: [F]; var notes: String?; var tags: [String]?
+        var item: VaultItem {
+            VaultItem(title: title, category: category ?? .custom,
+                      fields: fields.map { VaultField(label: $0.label, value: $0.value, kind: $0.kind ?? .text) },
+                      notes: notes ?? "", tags: tags ?? [])
         }
     }
 

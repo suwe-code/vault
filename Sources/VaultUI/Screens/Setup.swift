@@ -9,7 +9,6 @@ struct SetupScreen: View {
             case .setup(.password): PasswordStep(model: model)
             case .setup(.keyCard): KeyCardStep(model: model)
             case .setup(.biometrics): BiometricsStep(model: model)
-            case .setup(.code): CodeStep(model: model)
             case .setup(.done): DoneStep(model: model)
             default: EmptyView()
             }
@@ -21,7 +20,7 @@ private struct StepHeader: View {
     let n: Int, title: String
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Tok.s3) {
-            Tag("\(n) / 5")
+            Tag("\(n) / 4")
             Text(title).font(Type.title3()).foregroundStyle(Tok.text)
         }
     }
@@ -103,7 +102,7 @@ struct BiometricsStep: View {
                 Text("No biometrics are available on this device, so the secret key will have to be typed at every unlock. Enable Touch ID or Face ID in system settings and set up again if you want it released automatically.")
                     .font(Type.body()).foregroundStyle(Tok.text2)
             } else {
-                Text("The secret key is placed in this device's keychain behind \(name). Every unlock then needs \(name), the password and a one-time code. If \(name) is re-enrolled the key is discarded and the key card is needed again.")
+                Text("The secret key is placed in this device's keychain behind \(name). Every unlock then needs \(name) and the password. If \(name) is re-enrolled the key is discarded and the key card is needed again.")
                     .font(Type.body()).foregroundStyle(Tok.text2)
             }
             StatusLine(model.status, isError: model.statusIsError)
@@ -112,45 +111,15 @@ struct BiometricsStep: View {
     }
 }
 
-struct CodeStep: View {
-    @ObservedObject var model: AppModel
-    @State private var code = ""
-    var body: some View {
-        VStack(alignment: .leading, spacing: Tok.s4) {
-            StepHeader(n: 4, title: "One-time code")
-            Text("Scan with Google Authenticator, Apple Passwords or any authenticator. The entry is named VAULT and works on every device that opens this vault.")
-                .font(Type.body()).foregroundStyle(Tok.text2)
-            if let t = model.setupTOTP {
-                HStack(alignment: .top, spacing: Tok.s4) {
-                    QRView(t.provisioningURL(issuer: "VAULT", account: "suwe").absoluteString, size: Type.isPhone ? 120 : 160)
-                    VStack(alignment: .leading, spacing: Tok.s2) {
-                        Lbl("Manual entry")
-                        Text(Base32.encode(t.secret)).font(Type.data()).foregroundStyle(Tok.text).textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
-                        OpsButton("Copy") { model.copy(Base32.encode(t.secret), secret: true) }
-                    }
-                }
-            }
-            HStack(spacing: Tok.s1) {
-                OpsField("Code from the app", text: $code, style: .code, onSubmit: go)
-                RowButton("Verify", kind: .primary, disabled: code.filter(\.isNumber).count != 6, action: go).padding(.top, 18)
-            }
-            StatusLine(model.status, isError: model.statusIsError)
-        }
-    }
-    private func go() { model.setupConfirmCode(code) }
-}
-
 struct DoneStep: View {
     @ObservedObject var model: AppModel
     var body: some View {
         VStack(alignment: .leading, spacing: Tok.s4) {
-            StepHeader(n: 5, title: "Ready")
+            StepHeader(n: 4, title: "Ready")
             VStack(spacing: 0) {
                 row("Password", "SET"); Rule(quiet: true)
                 row("Secret key", "ON PAPER"); Rule(quiet: true)
-                row("This device", DeviceKeychain.availableBiometry() == .none ? "TYPED KEY" : "ENROLLED"); Rule(quiet: true)
-                row("One-time code", "VERIFIED")
+                row("This device", DeviceKeychain.availableBiometry() == .none ? "TYPED KEY" : "ENROLLED")
             }
             Text("To add your iPhone later: Sync, Export file, AirDrop it, then Import vault file on the phone with the password and the key card.")
                 .font(Type.body()).foregroundStyle(Tok.text2)

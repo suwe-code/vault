@@ -111,7 +111,7 @@ struct CardRow: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     Tag(item.category.label).frame(width: 90, alignment: .leading)
-                    Text("\(item.fields.count)").font(Type.dataBody()).foregroundStyle(Tok.text2).frame(width: 60, alignment: .trailing)
+                    Text("\(item.fields.filter { !$0.value.isEmpty }.count)").font(Type.dataBody()).foregroundStyle(Tok.text2).frame(width: 60, alignment: .trailing)
                     Text(Fmt.stamp(item.modifiedAt)).font(Type.dataBody()).foregroundStyle(Tok.text2).frame(width: 120, alignment: .trailing)
                 }
                 .padding(.vertical, Tok.s25)
@@ -146,7 +146,7 @@ struct CardDetail: View {
                 if Type.isPhone { actions }
                 Rule()
                 VStack(spacing: 0) {
-                    ForEach(item.fields) { f in
+                    ForEach(item.fields.filter { !$0.value.isEmpty }) { f in
                         FieldRow(field: f, revealed: revealed.contains(f.id),
                                  toggle: { if revealed.contains(f.id) { revealed.remove(f.id) } else { revealed.insert(f.id) }; model.touchActivity() },
                                  copy: { text, secret in model.copy(text, secret: secret) })
@@ -277,7 +277,7 @@ struct CardEditor: View {
                         Segmented(ItemCategory.allCases.map { ($0, $0.label) }, selection: $draft.category)
                     }
                     if isNew {
-                        Text("Changing the type replaces the empty starter fields").font(Type.hint()).foregroundStyle(Tok.text3)
+                        Text("Starter fields for the type. Empty ones are dropped on save. Remove or add any field.").font(Type.hint()).foregroundStyle(Tok.text3)
                     }
                 }
                 .onChange(of: draft.category) { _, c in
@@ -315,7 +315,7 @@ struct CardEditor: View {
     private func save() {
         var it = draft
         it.title = it.title.trimmingCharacters(in: .whitespaces)
-        it.fields = it.fields.filter { !$0.label.trimmingCharacters(in: .whitespaces).isEmpty || !$0.value.isEmpty }
+        it.fields = it.fields.filter { !$0.value.trimmingCharacters(in: .whitespaces).isEmpty }
         it.tags = tagsText.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         model.upsert(it)
         model.selectedItemID = it.id

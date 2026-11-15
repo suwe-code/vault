@@ -15,11 +15,12 @@ struct VaultApp: App {
         WindowGroup("VAULT") {
             RootView(model: model)
                 #if os(macOS)
-                .frame(minWidth: 960, minHeight: 680)
+                .frame(minWidth: 560, minHeight: 420)
                 .onAppear { hardenWindows() }
                 #endif
         }
         #if os(macOS)
+        .defaultSize(width: 760, height: 540)
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .newItem) {}

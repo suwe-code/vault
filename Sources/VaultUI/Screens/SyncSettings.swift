@@ -79,7 +79,6 @@ struct SettingsModule: View {
     @State private var newPw = ""
     @State private var confirm = ""
     @State private var shownKey: SecretKey?
-    @State private var newTOTP: TOTP?
     @State private var wipeArmed = false
     @State private var deviceName = ""
 
@@ -125,24 +124,6 @@ struct SettingsModule: View {
                         }
                     } else {
                         OpsButton("Show key card") { Task { shownKey = await model.revealSecretKey() } }
-                    }
-                }
-
-                Panel(title: "One-time code") {
-                    Text("Resetting creates a new VAULT entry for your authenticator. Delete the old entry afterwards. Applies to every device once they import this vault.")
-                        .font(Type.body()).foregroundStyle(Tok.text2)
-                    if let t = newTOTP {
-                        HStack(alignment: .top, spacing: Tok.s4) {
-                            QRView(t.provisioningURL(issuer: "VAULT", account: "suwe").absoluteString, size: 140)
-                            VStack(alignment: .leading, spacing: Tok.s2) {
-                                Lbl("Manual entry")
-                                Text(Base32.encode(t.secret)).font(Type.data()).foregroundStyle(Tok.text).textSelection(.enabled)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                OpsButton("Done") { newTOTP = nil }
-                            }
-                        }
-                    } else {
-                        OpsButton("Reset code") { newTOTP = model.resetOneTimeCode() }
                     }
                 }
 

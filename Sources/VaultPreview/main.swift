@@ -25,7 +25,6 @@ func sample() -> OpenVault {
     for (i, s) in ["PAN card", "ABCDE1234F", "SUWETHA PARKER", "1996-04-12"].enumerated() { pan.fields[i].value = s }
     let note = VaultItem(title: "Locker", category: .note, notes: "Locker 214 at the Indiranagar branch. Key in the desk drawer.")
     v.payload.items = [bank, card, gmail, pan, note]
-    v.payload.totpSecret = TOTP.generateSecret().secret
     return v
 }
 
@@ -48,11 +47,8 @@ func scenarios() -> [Scenario] {
         Scenario(name: "05-mac-setup-keycard", size: mac, phone: false, prepare: model { $0.beginSetup(); $0.phase = .setup(.keyCard) }),
         Scenario(name: "05-phone-setup-keycard", size: ph, phone: true, prepare: model { $0.beginSetup(); $0.phase = .setup(.keyCard) }),
         Scenario(name: "06-mac-setup-biometrics", size: mac, phone: false, prepare: model { $0.beginSetup(); $0.phase = .setup(.biometrics) }),
-        Scenario(name: "07-mac-setup-code", size: mac, phone: false, prepare: model { $0.beginSetup(); $0.phase = .setup(.code) }),
-        Scenario(name: "07-phone-setup-code", size: ph, phone: true, prepare: model { $0.beginSetup(); $0.phase = .setup(.code) }),
         Scenario(name: "08-mac-setup-done", size: mac, phone: false, prepare: model { $0.beginSetup(); $0.phase = .setup(.done) }),
         Scenario(name: "09-mac-adopt", size: mac, phone: false, prepare: model { $0.phase = .adopt }),
-        Scenario(name: "10-mac-code-gate", size: mac, phone: false, prepare: model { $0.phase = .code }),
         Scenario(name: "11-mac-cards", size: mac, phone: false, prepare: model { $0.loadForPreview(v) }),
         Scenario(name: "11-phone-cards", size: ph, phone: true, prepare: model { $0.loadForPreview(v) }),
         Scenario(name: "12-mac-card-detail", size: mac, phone: false, prepare: model { $0.loadForPreview(v); $0.selectedItemID = v.payload.items[0].id }),

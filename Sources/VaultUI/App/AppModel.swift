@@ -10,7 +10,7 @@ import AppKit
 
 public enum Module: Hashable { case cards, sync, settings }
 
-public enum SetupStep: Hashable { case password, keyCard, biometrics, code, done }
+public enum SetupStep: Hashable { case password, keyCard, biometrics, done }
 
 public enum Phase: Hashable {
     case loading
@@ -18,7 +18,6 @@ public enum Phase: Hashable {
     case setup(SetupStep)        // creating a new vault
     case adopt                   // importing an existing vault file onto this device
     case locked
-    case code                    // decrypted, waiting for the one-time code
     case unlocked
 }
 
@@ -38,7 +37,6 @@ public final class AppModel: ObservableObject {
 
     // Setup scratch (cleared when setup ends)
     @Published public var setupSecretKey: SecretKey?
-    @Published public var setupTOTP: TOTP?
     public var setupPassword = ""
 
     @AppStorage("autoLockSeconds") public var autoLockSeconds: Int = 120
@@ -48,7 +46,6 @@ public final class AppModel: ObservableObject {
     private var lockedFile: VaultFile?
     private var autoLockTask: Task<Void, Never>?
     private var clipboardTask: Task<Void, Never>?
-    private var pendingVault: OpenVault?   // decrypted but gated behind the one-time code
 
     public init(store: LocalStore = LocalStore()) {
         self.store = store
@@ -56,7 +53,7 @@ public final class AppModel: ObservableObject {
         reload()
     }
 
-    public var vaultID: UUID? { (vault ?? pendingVault)?.header.vaultID ?? lockedFile?.header.vaultID }
+    public var vaultID: UUID? { vault?.header.vaultID ?? lockedFile?.header.vaultID }
     public var items: [VaultItem] { vault?.payload.liveItems ?? [] }
 
     public func reload() {
@@ -74,7 +71,7 @@ public final class AppModel: ObservableObject {
 
     // MARK: Unlock
 
-    /// Password + biometrics (releases the secret key) → decrypt → one-time code gate.
+    /// Password + biometrics (releases the secret key) → decrypt.
     public func unlock(password: String) {
         guard let file = lockedFile, !busy else { return }
         busy = true; setStatus("Checking")
@@ -121,26 +118,10 @@ public final class AppModel: ObservableObject {
             try OpenVault.unlock(file: file, password: password, secretKey: secretKey)
         }.value
         setStatus(nil)
-        if opened.payload.totpSecret != nil {
-            pendingVault = opened
-            phase = .code
-        } else {
-            enterUnlocked(opened)
-        }
-    }
-
-    public func verifyCode(_ code: String) {
-        guard let pv = pendingVault, let seed = pv.payload.totpSecret else { return }
-        let totp = TOTP(secret: seed)
-        guard let counter = totp.validate(code) else { setStatus("Incorrect code", error: true); return }
-        let id = pv.header.vaultID
-        guard counter > DeviceKeychain.lastAcceptedCounter(vaultID: id) else { setStatus("Code already used", error: true); return }
-        DeviceKeychain.setLastAcceptedCounter(counter, vaultID: id)
-        enterUnlocked(pv)
+        enterUnlocked(opened)
     }
 
     private func enterUnlocked(_ v: OpenVault) {
-        pendingVault = nil
         vault = v
         setStatus(nil)
         phase = .unlocked
@@ -151,7 +132,6 @@ public final class AppModel: ObservableObject {
     public func lock() {
         autoLockTask?.cancel()
         vault = nil
-        pendingVault = nil
         selectedItemID = nil
         editingItem = nil
         setStatus(nil)
@@ -160,7 +140,7 @@ public final class AppModel: ObservableObject {
 
     public func touchActivity() {
         autoLockTask?.cancel()
-        guard phase == .unlocked || phase == .code, autoLockSeconds > 0 else { return }
+        guard phase == .unlocked, autoLockSeconds > 0 else { return }
         let secs = autoLockSeconds
         autoLockTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(secs) * 1_000_000_000)
@@ -172,7 +152,7 @@ public final class AppModel: ObservableObject {
     // MARK: Setup: new vault
 
     public func beginSetup() {
-        setupPassword = ""; setupSecretKey = SecretKey.generate(); setupTOTP = TOTP.generateSecret()
+        setupPassword = ""; setupSecretKey = SecretKey.generate()
         setStatus(nil); phase = .setup(.password)
     }
 
@@ -189,18 +169,17 @@ public final class AppModel: ObservableObject {
         // The vault is created now so the secret key can be bound to its id.
         guard let sk = setupSecretKey else { return }
         busy = true; setStatus("Creating vault")
-        let pw = setupPassword, name = deviceName, totp = setupTOTP
+        let pw = setupPassword, name = deviceName
         Task {
             do {
-                var v = try await Task.detached(priority: .userInitiated) {
+                let v = try await Task.detached(priority: .userInitiated) {
                     try OpenVault.create(password: pw, secretKey: sk, deviceName: name)
                 }.value
-                v.payload.totpSecret = totp?.secret
                 try DeviceKeychain.storeSecretKey(sk, vaultID: v.header.vaultID)
                 vault = v
                 try persist()
                 setStatus(nil)
-                phase = .setup(.code)
+                phase = .setup(.done)
             } catch {
                 setStatus(error.localizedDescription, error: true)
             }
@@ -208,16 +187,8 @@ public final class AppModel: ObservableObject {
         }
     }
 
-    public func setupConfirmCode(_ code: String) {
-        guard let totp = setupTOTP, let v = vault else { return }
-        guard let c = totp.validate(code) else { setStatus("Incorrect code. Check the authenticator entry.", error: true); return }
-        DeviceKeychain.setLastAcceptedCounter(c, vaultID: v.header.vaultID)
-        setStatus(nil)
-        phase = .setup(.done)
-    }
-
     public func setupFinish() {
-        setupPassword = ""; setupSecretKey = nil; setupTOTP = nil
+        setupPassword = ""; setupSecretKey = nil
         guard let v = vault else { phase = .welcome; return }
         enterUnlocked(v)
     }
@@ -242,7 +213,7 @@ public final class AppModel: ObservableObject {
                 }
                 pendingImportURL = nil
                 setStatus(nil)
-                if opened.payload.totpSecret != nil { pendingVault = opened; phase = .code } else { enterUnlocked(opened) }
+                enterUnlocked(opened)
             } catch {
                 setStatus(error.localizedDescription, error: true)
             }
@@ -388,19 +359,10 @@ public final class AppModel: ObservableObject {
         }.value
     }
 
-    public func resetOneTimeCode() -> TOTP? {
-        guard var v = vault else { return nil }
-        let t = TOTP.generateSecret()
-        v.payload.totpSecret = t.secret
-        vault = v
-        try? persist()
-        return t
-    }
-
     public func wipeThisDevice() {
         if let id = vaultID { DeviceKeychain.wipe(vaultID: id) }
         store.wipe()
-        vault = nil; pendingVault = nil; lockedFile = nil
+        vault = nil; lockedFile = nil
         phase = .welcome
     }
 

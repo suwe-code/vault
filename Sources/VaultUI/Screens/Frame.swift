@@ -18,7 +18,6 @@ public struct RootView: View {
             case .setup: SetupScreen(model: model)
             case .adopt: AdoptScreen(model: model)
             case .locked: LockScreen(model: model)
-            case .code: CodeScreen(model: model)
             case .unlocked: UnlockedShell(model: model)
             }
             if covered { PrivacyCover() }
@@ -30,7 +29,7 @@ public struct RootView: View {
         .onChange(of: scenePhase) { _, p in
             #if os(iOS)
             covered = p != .active
-            if p == .background, model.phase == .unlocked || model.phase == .code { model.lock() }
+            if p == .background, model.phase == .unlocked { model.lock() }
             #else
             if p == .background, model.phase == .unlocked { model.lock() }
             #endif
@@ -42,7 +41,7 @@ public struct RootView: View {
 /// Shown over everything while the app is in the switcher. Reveals nothing.
 struct PrivacyCover: View {
     var body: some View {
-        ZStack { Tok.bg.ignoresSafeArea(); Sig(["VAULT"]) }
+        Tok.bg.ignoresSafeArea()
     }
 }
 
@@ -105,19 +104,18 @@ struct Frame<Content: View>: View {
     }
 }
 
-/// A centred narrow column for gates and wizards, signature at the foot.
+/// A centred narrow column for gates and wizards.
 struct Gate<Content: View>: View {
     var width: CGFloat = 320
     @ViewBuilder let content: () -> Content
     var body: some View {
         VStack(spacing: 0) {
-            Spacer(minLength: Tok.s12)
+            Spacer(minLength: Tok.s6)
             content().frame(maxWidth: width)
-            Spacer(minLength: Tok.s12)
-            HStack { Sig(["SUWE", "VAULT"]); Spacer() }.frame(maxWidth: width)
+            Spacer(minLength: Tok.s6)
         }
         .padding(.horizontal, Type.isPhone ? Tok.phoneGutter : Tok.s5)
-        .padding(.bottom, Tok.s6)
+        .padding(.vertical, Tok.s6)
     }
 }
 
@@ -130,15 +128,14 @@ struct LockScreen: View {
 
     var body: some View {
         Gate {
-            VStack(alignment: .leading, spacing: Tok.s3) {
-                Lbl("Password")
-                HStack(spacing: Tok.s1) {
-                    OpsField("", text: $password, style: .secure, autofocus: true, onSubmit: submit)
-                    RowButton("Unlock", disabled: model.busy || password.isEmpty, action: submit)
-                }
+            VStack(alignment: .leading, spacing: Tok.s4) {
+                Tag("LOCKED")
+                OpsField("Password", text: $password, style: .secure, autofocus: true, onSubmit: submit)
                 if model.needsTypedKey {
-                    OpsField("Secret key", text: $typedKey, style: .mono, placeholder: "VK1-")
+                    OpsField("Secret key", text: $typedKey, style: .mono, placeholder: "VK1-", onSubmit: submit)
                 }
+                OpsButton("Unlock", kind: .primary, disabled: model.busy || password.isEmpty, action: submit)
+                    .frame(maxWidth: .infinity)
                 StatusLine(model.status, isError: model.statusIsError)
             }
         }
@@ -150,31 +147,6 @@ struct LockScreen: View {
         if model.needsTypedKey && !typedKey.isEmpty { model.unlock(password: password, typedKey: typedKey) }
         else { model.unlock(password: password) }
     }
-}
-
-// MARK: One-time code gate
-
-struct CodeScreen: View {
-    @ObservedObject var model: AppModel
-    @State private var code = ""
-
-    var body: some View {
-        Gate {
-            VStack(alignment: .leading, spacing: Tok.s3) {
-                Lbl("Code")
-                HStack(spacing: Tok.s1) {
-                    OpsField("", text: $code, style: .code, autofocus: true, onSubmit: submit)
-                    RowButton("Verify", disabled: code.filter(\.isNumber).count != 6, action: submit)
-                }
-                Text("Authenticator entry VAULT").font(Type.hint()).foregroundStyle(Tok.text3)
-                StatusLine(model.status, isError: model.statusIsError)
-                OpsButton("Cancel") { model.lock() }
-            }
-        }
-        .onChange(of: code) { _, v in if v.filter(\.isNumber).count == 6 { submit() } }
-    }
-
-    private func submit() { model.verifyCode(code); code = "" }
 }
 
 // MARK: Welcome

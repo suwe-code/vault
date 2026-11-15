@@ -13,6 +13,7 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     # Free personal team: Xcode fills DEVELOPMENT_TEAM when you pick it under Signing.
     CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: HC32XZWP42
     ENABLE_HARDENED_RUNTIME: YES
     DEAD_CODE_STRIPPING: YES
 packages:

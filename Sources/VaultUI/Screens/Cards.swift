@@ -126,6 +126,8 @@ struct CardRow: View {
 
 // MARK: Detail
 
+/// Design section 07 "Card": bordered panel on surface, 16px padding, title-3 header with a tag at the
+/// right, label left and mono value right. Hovering a row shows its actions; clicking a value copies it.
 struct CardDetail: View {
     @ObservedObject var model: AppModel
     let item: VaultItem
@@ -133,89 +135,133 @@ struct CardDetail: View {
     @State private var revealed: Set<UUID> = []
     @State private var confirmDelete = false
 
+    private var filled: [VaultField] { item.fields.filter { !$0.value.isEmpty } }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Tok.s4) {
-                HStack(alignment: .firstTextBaseline, spacing: Tok.s3) {
+                HStack(spacing: Tok.s1) {
                     OpsButton("Back") { model.selectedItemID = nil }
-                    Text(item.title).font(Type.title3()).foregroundStyle(Tok.text).lineLimit(1)
-                    Tag(item.category.label)
                     Spacer()
-                    if !Type.isPhone { actions }
-                }
-                if Type.isPhone { actions }
-                Rule()
-                VStack(spacing: 0) {
-                    ForEach(item.fields.filter { !$0.value.isEmpty }) { f in
-                        FieldRow(field: f, revealed: revealed.contains(f.id),
-                                 toggle: { if revealed.contains(f.id) { revealed.remove(f.id) } else { revealed.insert(f.id) }; model.touchActivity() },
-                                 copy: { text, secret in model.copy(text, secret: secret) })
-                        Rule(quiet: true)
+                    OpsButton("Edit", action: onEdit)
+                    if confirmDelete {
+                        OpsButton("Confirm delete", kind: .danger) { model.delete(item.id) }
+                        OpsButton("Keep") { confirmDelete = false }
+                    } else {
+                        OpsButton("Delete", kind: .danger) { confirmDelete = true }
                     }
                 }
-                if !item.notes.isEmpty {
-                    VStack(alignment: .leading, spacing: Tok.s2) {
-                        Lbl("Notes")
-                        Text(item.notes).font(Type.body()).foregroundStyle(Tok.text2).textSelection(.enabled)
-                    }
-                }
-                if !item.tags.isEmpty {
-                    HStack(spacing: Tok.s2) { ForEach(item.tags, id: \.self) { Tag($0) } }
-                }
+                card
                 HStack {
-                    Text("Created \(Fmt.stamp(item.createdAt))  Updated \(Fmt.stamp(item.modifiedAt))").font(Type.hint()).foregroundStyle(Tok.text3)
+                    Text("Created \(Fmt.stamp(item.createdAt))   Updated \(Fmt.stamp(item.modifiedAt))").font(Type.hint()).foregroundStyle(Tok.text3)
                     Spacer()
-                    StatusLine(model.status, isError: model.statusIsError).frame(maxWidth: 240)
+                    StatusLine(model.status, isError: model.statusIsError)
                 }
+                .frame(maxWidth: cardWidth)
             }
         }
     }
 
-    private var actions: some View {
-        HStack(spacing: Tok.s1) {
-            OpsButton("Edit", action: onEdit)
-            if confirmDelete {
-                OpsButton("Confirm delete", kind: .danger) { model.delete(item.id) }
-                OpsButton("Keep") { confirmDelete = false }
-            } else {
-                OpsButton("Delete", kind: .danger) { confirmDelete = true }
+    private var cardWidth: CGFloat { Type.isPhone ? .infinity : 560 }
+
+    private var card: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: Tok.s3) {
+                Text(item.title).font(Type.title3()).foregroundStyle(Tok.text).lineLimit(2)
+                Spacer()
+                HStack(spacing: Tok.s2) {
+                    if item.favourite { Rectangle().fill(Tok.text).frame(width: 6, height: 6) }
+                    Tag(item.category.label)
+                }
+            }
+            .padding(.bottom, Tok.s3)
+            if filled.isEmpty && item.notes.isEmpty {
+                Text("Nothing entered yet").font(Type.meta()).foregroundStyle(Tok.text3).padding(.vertical, Tok.s3)
+            }
+            ForEach(filled) { f in
+                CardFieldRow(field: f, revealed: revealed.contains(f.id),
+                             toggle: { if revealed.contains(f.id) { revealed.remove(f.id) } else { revealed.insert(f.id) }; model.touchActivity() },
+                             copy: { text, secret in model.copy(text, secret: secret) })
+                Rule(quiet: true)
+            }
+            if !item.notes.isEmpty {
+                VStack(alignment: .leading, spacing: Tok.s2) {
+                    Lbl("Notes")
+                    Text(item.notes).font(Type.body()).foregroundStyle(Tok.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.top, Tok.s3)
+            }
+            if !item.tags.isEmpty {
+                HStack(spacing: Tok.s3) { ForEach(item.tags, id: \.self) { Tag($0) } }
+                    .padding(.top, Tok.s3)
             }
         }
+        .padding(Tok.s4)
+        .frame(maxWidth: cardWidth, alignment: .leading)
+        .background(Tok.surface)
+        .overlay(Rectangle().stroke(Tok.border, lineWidth: 1))
     }
 }
 
-struct FieldRow: View {
+/// One card row. Label left in caps, value right in mono. Hover highlights the row and shows
+/// REVEAL / COPY at the end; clicking anywhere on the row copies the value. Phones show the actions always.
+struct CardFieldRow: View {
     let field: VaultField
     let revealed: Bool
     let toggle: () -> Void
     let copy: (String, Bool) -> Void
+    @State private var hover = false
     @State private var tick = Date()
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    private var isOTP: Bool { field.kind == .otpSecret }
+    private var showActions: Bool { Type.isPhone || hover }
 
     var body: some View {
         Group {
             if Type.isPhone {
+                // Field layout: label above, value and actions below.
                 VStack(alignment: .leading, spacing: Tok.s2) {
                     Lbl(field.label)
-                    HStack { value; Spacer(); buttons }
+                    HStack(alignment: .firstTextBaseline, spacing: Tok.s3) {
+                        value.multilineTextAlignment(.leading)
+                        Spacer(minLength: Tok.s2)
+                        actions
+                    }
                 }
             } else {
                 HStack(alignment: .firstTextBaseline, spacing: Tok.s3) {
-                    Lbl(field.label).frame(width: 180, alignment: .leading)
+                    Lbl(field.label).frame(width: 150, alignment: .leading)
+                    Spacer(minLength: Tok.s2)
                     value
-                    Spacer()
-                    buttons
+                    if showActions { actions.frame(width: actionsWidth, alignment: .trailing) }
+                    else { Color.clear.frame(width: actionsWidth, height: 1) }
                 }
             }
         }
         .padding(.vertical, Tok.s25)
+        .padding(.horizontal, Tok.s2)
+        .background(hover ? Tok.elevated : .clear)
+        .contentShape(Rectangle())
+        .onTapGesture { doCopy() }
+        .onHover { hover = $0 }
         .onReceive(timer) { tick = $0 }
     }
 
+    private var actionsWidth: CGFloat { field.kind.isSecret && !isOTP ? 86 : 40 }
+
+    private var actions: some View {
+        HStack(spacing: Tok.s3) {
+            if field.kind.isSecret && !isOTP {
+                Button(action: toggle) { Lbl(revealed ? "Hide" : "Reveal", color: Tok.text2) }.buttonStyle(.plain)
+            }
+            Button(action: doCopy) { Lbl("Copy", color: Tok.text2) }.buttonStyle(.plain)
+        }
+    }
+
     @ViewBuilder private var value: some View {
-        if field.value.isEmpty {
-            Text("-").font(Type.dataBody()).foregroundStyle(Tok.text3)
-        } else if field.kind == .otpSecret {
+        if isOTP {
             if let seed = Base32.decode(field.value), !seed.isEmpty {
                 let t = TOTP(secret: seed)
                 HStack(spacing: Tok.s2) {
@@ -229,23 +275,13 @@ struct FieldRow: View {
             Text(String(repeating: "•", count: min(field.value.count, 14))).font(Type.data()).foregroundStyle(Tok.text2)
         } else {
             Text(field.value).font(field.kind.isMono ? Type.data() : Type.body()).foregroundStyle(Tok.text)
-                .textSelection(.enabled).lineLimit(4)
+                .multilineTextAlignment(.trailing).lineLimit(4)
         }
     }
 
-    private var buttons: some View {
-        HStack(spacing: Tok.s1) {
-            if field.kind.isSecret && field.kind != .otpSecret && !field.value.isEmpty {
-                OpsButton(revealed ? "Hide" : "Reveal", compact: true, action: toggle)
-            }
-            if !field.value.isEmpty {
-                OpsButton("Copy", compact: true) {
-                    if field.kind == .otpSecret, let seed = Base32.decode(field.value) {
-                        copy(TOTP(secret: seed).code(), true)
-                    } else { copy(field.value, field.kind.isSecret) }
-                }
-            }
-        }
+    private func doCopy() {
+        if isOTP, let seed = Base32.decode(field.value) { copy(TOTP(secret: seed).code(), true) }
+        else { copy(field.value, field.kind.isSecret) }
     }
 }
 

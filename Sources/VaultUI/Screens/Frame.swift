@@ -134,8 +134,7 @@ struct LockScreen: View {
                 if model.needsTypedKey {
                     OpsField("Secret key", text: $typedKey, style: .mono, placeholder: "VK1-", onSubmit: submit)
                 }
-                OpsButton("Unlock", kind: .primary, disabled: model.busy || password.isEmpty, action: submit)
-                    .frame(maxWidth: .infinity)
+                OpsButton("Unlock", kind: .primary, disabled: model.busy, action: submit)
                 StatusLine(model.status, isError: model.statusIsError)
             }
         }

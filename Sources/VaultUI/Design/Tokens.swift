@@ -32,6 +32,10 @@ public enum Tok {
 
     // Layout (section 06, 13)
     public static let appColumn: CGFloat = 880
+    /// Smallest side of a credentials square; the row is split evenly into as many as fit.
+    public static let cardMin: CGFloat = 250
+    /// Card height: header plus three field rows; more rows scroll inside the card.
+    public static let cardHeight: CGFloat = 212
     public static let phoneGutter: CGFloat = 24
     public static let inputHeight: CGFloat = 34
     public static let buttonHeight: CGFloat = 18

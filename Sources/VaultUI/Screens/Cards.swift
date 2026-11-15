@@ -77,14 +77,20 @@ struct CardsModule: View {
             } else if visible.isEmpty {
                 Text("No match").font(Type.meta()).foregroundStyle(Tok.text3).padding(.top, Tok.s6)
             } else {
-                ScrollView(showsIndicators: false) {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: Type.isPhone ? 300 : 260, maximum: 340), spacing: Tok.s3, alignment: .top)],
-                              alignment: .leading, spacing: Tok.s3) {
-                        ForEach(visible) { item in
-                            MiniCard(model: model, item: item) { model.editingItem = item }
+                // Equal rectangles, justified across the row, tall enough for three fields. Each card scrolls inside itself.
+                GeometryReader { geo in
+                    let gap = Tok.s3
+                    let n = Type.isPhone ? 1 : max(1, Int((geo.size.width + gap) / (Tok.cardMin + gap)))
+                    let side = (geo.size.width - CGFloat(n - 1) * gap) / CGFloat(n)
+                    ScrollView(showsIndicators: false) {
+                        LazyVGrid(columns: Array(repeating: GridItem(.fixed(side), spacing: gap), count: n), alignment: .leading, spacing: gap) {
+                            ForEach(visible) { item in
+                                MiniCard(model: model, item: item) { model.editingItem = item }
+                                    .frame(width: side, height: Tok.cardHeight)
+                            }
                         }
+                        .padding(.bottom, Tok.s4)
                     }
-                    .padding(.bottom, Tok.s4)
                 }
             }
             StatusLine(model.status, isError: model.statusIsError)
@@ -129,23 +135,27 @@ struct MiniCard: View {
             }
             .padding(.bottom, Tok.s2)
             Rule(quiet: true)
-            if filled.isEmpty && item.notes.isEmpty {
-                Text("Nothing entered").font(Type.hint()).foregroundStyle(Tok.text3).padding(.vertical, Tok.s2)
-            }
-            ForEach(filled) { f in
-                CardFieldRow(field: f, revealed: revealed.contains(f.id),
-                             toggle: { if revealed.contains(f.id) { revealed.remove(f.id) } else { revealed.insert(f.id) }; model.touchActivity() },
-                             copy: { text, secret in model.copy(text, secret: secret); model.noteUse(item.id) })
-                Rule(quiet: true)
-            }
-            if !item.notes.isEmpty {
-                Text(item.notes).font(Type.hint()).foregroundStyle(Tok.text2).lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, Tok.s2)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    if filled.isEmpty && item.notes.isEmpty {
+                        Text("Nothing entered").font(Type.hint()).foregroundStyle(Tok.text3).padding(.vertical, Tok.s2)
+                    }
+                    ForEach(filled) { f in
+                        CardFieldRow(field: f, revealed: revealed.contains(f.id),
+                                     toggle: { if revealed.contains(f.id) { revealed.remove(f.id) } else { revealed.insert(f.id) }; model.touchActivity() },
+                                     copy: { text, secret in model.copy(text, secret: secret); model.noteUse(item.id) })
+                        Rule(quiet: true)
+                    }
+                    if !item.notes.isEmpty {
+                        Text(item.notes).font(Type.hint()).foregroundStyle(Tok.text2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, Tok.s2)
+                    }
+                }
             }
         }
         .padding(Tok.s3)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Tok.surface)
         .overlay(Rectangle().stroke(hover ? Tok.text3 : Tok.border, lineWidth: 1))
         .onHover { hover = $0 }

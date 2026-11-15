@@ -283,7 +283,7 @@ struct CardEditor: View {
                 .onChange(of: draft.category) { _, c in
                     if isNew && draft.fields.allSatisfy({ $0.value.isEmpty }) { draft.fields = Templates.fields(for: c) }
                 }
-                OpsField("Title", text: $draft.title, placeholder: "HDFC Savings, Gmail, PAN", autofocus: isNew)
+                OpsField("Title", text: $draft.title, placeholder: "", autofocus: isNew)
                 VStack(alignment: .leading, spacing: Tok.s2) {
                     Lbl("Fields")
                     VStack(spacing: Tok.s2) {

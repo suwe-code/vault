@@ -90,7 +90,7 @@ public enum FieldKind: String, Codable, CaseIterable, Sendable {
 }
 
 public enum ItemCategory: String, Codable, CaseIterable, Sendable {
-    case bank, card, login, identity, note, custom
+    case login, bank, card, identity, note, custom   // display order
 
     public var label: String {
         switch self {

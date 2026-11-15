@@ -62,7 +62,6 @@ struct Frame<Content: View>: View {
 
             content()
                 .frame(maxWidth: Tok.appColumn, maxHeight: .infinity, alignment: .top)
-                .background(Tok.surface.opacity(Type.isPhone ? 0 : 1))
                 .overlay(Rectangle().stroke(Type.isPhone ? .clear : Tok.border, lineWidth: 1))
 
             HStack(alignment: .top) {

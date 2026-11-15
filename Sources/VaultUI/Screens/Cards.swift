@@ -10,19 +10,7 @@ struct CardsModule: View {
         if let draft = model.editingItem {
             CardEditor(model: model, original: draft, isNew: model.item(draft.id) == nil) { model.editingItem = nil }
         } else {
-            ZStack {
-                list
-                if let item = model.item(model.selectedItemID) {
-                    // The card floats over the list. Click outside, Esc or CLOSE puts it away.
-                    Tok.bg.opacity(0.72)
-                        .contentShape(Rectangle())
-                        .onTapGesture { model.selectedItemID = nil }
-                    CardDetail(model: model, item: item, onEdit: { model.editingItem = item }, onClose: { model.selectedItemID = nil })
-                        .padding(Type.isPhone ? 0 : Tok.s4)
-                    Button("") { model.selectedItemID = nil }.keyboardShortcut(.cancelAction).frame(width: 0, height: 0).opacity(0)
-                }
-            }
-            .animation(.easeOut(duration: 0.12), value: model.selectedItemID)
+            grid
         }
     }
 
@@ -41,27 +29,32 @@ struct CardsModule: View {
             .filter { filter == nil || $0.category == filter }
             .filter { q.isEmpty || $0.searchText.contains(q) }
             .sorted { a, b in
+                // Logins, then bank, then cards, then the rest. Pinned first within a type, then by title.
+                let order = ItemCategory.allCases
+                let ia = order.firstIndex(of: a.category) ?? 0, ib = order.firstIndex(of: b.category) ?? 0
+                if ia != ib { return ia < ib }
                 if a.favourite != b.favourite { return a.favourite }
                 return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
             }
     }
 
-    private var list: some View {
+    /// Every card is shown whole, small, in a scrolling grid. Values copy from here; nothing opens.
+    private var grid: some View {
         VStack(alignment: .leading, spacing: Tok.s4) {
             if Type.isPhone {
                 VStack(alignment: .leading, spacing: Tok.s2) {
                     ScrollView(.horizontal, showsIndicators: false) { Segmented(counts, selection: $filter) }
                     HStack(spacing: Tok.s1) {
                         OpsField("", text: $query, placeholder: "Search")
-                        RowButton("Add", kind: .primary) { newCard() }
+                        RowButton("Add new", kind: .primary) { newCard() }
                     }
                 }
             } else {
                 HStack(spacing: Tok.s3) {
                     Segmented(counts, selection: $filter)
-                    OpsField("", text: $query, placeholder: "Search title, label or tag").frame(maxWidth: 280)
+                    OpsField("", text: $query, placeholder: "Search").frame(maxWidth: 220)
                     Spacer()
-                    OpsButton("Add card", kind: .primary) { newCard() }
+                    OpsButton("Add new credentials", kind: .primary) { newCard() }
                 }
             }
             if model.items.isEmpty {
@@ -69,25 +62,17 @@ struct CardsModule: View {
             } else if visible.isEmpty {
                 Text("No match").font(Type.meta()).foregroundStyle(Tok.text3).padding(.top, Tok.s6)
             } else {
-                ScrollView {
-                    VStack(spacing: 0) {
-                        if !Type.isPhone {
-                            HStack(spacing: Tok.s3) {
-                                Lbl("Title").frame(maxWidth: .infinity, alignment: .leading)
-                                Lbl("Type").frame(width: 90, alignment: .leading)
-                                Lbl("Fields").frame(width: 60, alignment: .trailing)
-                                Lbl("Updated").frame(width: 120, alignment: .trailing)
-                            }
-                            .padding(.vertical, Tok.s25)
-                            Rule()
-                        }
+                ScrollView(showsIndicators: false) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: Type.isPhone ? 300 : 260, maximum: 340), spacing: Tok.s3, alignment: .top)],
+                              alignment: .leading, spacing: Tok.s3) {
                         ForEach(visible) { item in
-                            CardRow(item: item) { model.selectedItemID = item.id; model.touchActivity() }
-                            Rule(quiet: true)
+                            MiniCard(model: model, item: item) { model.editingItem = item }
                         }
                     }
+                    .padding(.bottom, Tok.s4)
                 }
             }
+            StatusLine(model.status, isError: model.statusIsError)
         }
     }
 
@@ -96,79 +81,34 @@ struct CardsModule: View {
     }
 }
 
-struct CardRow: View {
-    let item: VaultItem
-    let open: () -> Void
-    @State private var hover = false
-    var body: some View {
-        Button(action: open) {
-            if Type.isPhone {
-                HStack(spacing: Tok.s3) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(item.title).font(Type.bodyStrong()).foregroundStyle(Tok.text).lineLimit(1)
-                        Tag(item.category.label)
-                    }
-                    Spacer()
-                    Text(Fmt.day(item.modifiedAt)).font(Type.tag()).foregroundStyle(Tok.text3)
-                }
-                .padding(.vertical, Tok.s3)
-                .contentShape(Rectangle())
-            } else {
-                HStack(spacing: Tok.s3) {
-                    HStack(spacing: Tok.s2) {
-                        if item.favourite { Rectangle().fill(Tok.text).frame(width: 6, height: 6) }
-                        Text(item.title).font(Type.bodyStrong()).foregroundStyle(Tok.text).lineLimit(1)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    Tag(item.category.label).frame(width: 90, alignment: .leading)
-                    Text("\(item.fields.filter { !$0.value.isEmpty }.count)").font(Type.dataBody()).foregroundStyle(Tok.text2).frame(width: 60, alignment: .trailing)
-                    Text(Fmt.stamp(item.modifiedAt)).font(Type.dataBody()).foregroundStyle(Tok.text2).frame(width: 120, alignment: .trailing)
-                }
-                .padding(.vertical, Tok.s25)
-                .background(hover ? Tok.elevated : .clear)
-                .contentShape(Rectangle())
-            }
-        }
-        .buttonStyle(.plain)
-        .onHover { hover = $0 }
-    }
-}
+// MARK: Mini card
 
-// MARK: Detail
-
-/// Design section 07 "Card": bordered panel on surface, 16px padding, title-3 header with a tag at the
-/// right, label left and mono value right. Hovering a row shows its actions; clicking a value copies it.
-struct CardDetail: View {
+/// Design section 07 "Card", compact: bordered panel on surface, 12px padding, title with the type tag
+/// at the right, label left and mono value right. Hover a row for REVEAL / COPY; click the row to copy.
+struct MiniCard: View {
     @ObservedObject var model: AppModel
     let item: VaultItem
     let onEdit: () -> Void
-    let onClose: () -> Void
     @State private var revealed: Set<UUID> = []
-    @State private var confirmDelete = false
+    @State private var hover = false
 
     private var filled: [VaultField] { item.fields.filter { !$0.value.isEmpty } }
 
     var body: some View {
-        ScrollView(showsIndicators: false) { card }
-            .frame(maxWidth: cardWidth)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private var cardWidth: CGFloat { Type.isPhone ? .infinity : 560 }
-
-    private var card: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: Tok.s3) {
-                Text(item.title).font(Type.title3()).foregroundStyle(Tok.text).lineLimit(2)
-                Spacer()
-                HStack(spacing: Tok.s2) {
-                    if item.favourite { Rectangle().fill(Tok.text).frame(width: 6, height: 6) }
-                    Tag(item.category.label)
+            HStack(alignment: .firstTextBaseline, spacing: Tok.s2) {
+                if item.favourite { Rectangle().fill(Tok.text).frame(width: 5, height: 5) }
+                Text(item.title).font(Type.bodyStrong()).foregroundStyle(Tok.text).lineLimit(1)
+                Spacer(minLength: Tok.s2)
+                Tag(item.category.label)
+                if hover || Type.isPhone {
+                    Button(action: onEdit) { Lbl("Edit", color: Tok.text2) }.buttonStyle(.plain)
                 }
             }
-            .padding(.bottom, Tok.s3)
+            .padding(.bottom, Tok.s2)
+            Rule(quiet: true)
             if filled.isEmpty && item.notes.isEmpty {
-                Text("Nothing entered yet").font(Type.meta()).foregroundStyle(Tok.text3).padding(.vertical, Tok.s3)
+                Text("Nothing entered").font(Type.hint()).foregroundStyle(Tok.text3).padding(.vertical, Tok.s2)
             }
             ForEach(filled) { f in
                 CardFieldRow(field: f, revealed: revealed.contains(f.id),
@@ -177,38 +117,16 @@ struct CardDetail: View {
                 Rule(quiet: true)
             }
             if !item.notes.isEmpty {
-                VStack(alignment: .leading, spacing: Tok.s2) {
-                    Lbl("Notes")
-                    Text(item.notes).font(Type.body()).foregroundStyle(Tok.text2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.top, Tok.s3)
+                Text(item.notes).font(Type.hint()).foregroundStyle(Tok.text2).lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, Tok.s2)
             }
-            if !item.tags.isEmpty {
-                HStack(spacing: Tok.s3) { ForEach(item.tags, id: \.self) { Tag($0) } }
-                    .padding(.top, Tok.s3)
-            }
-            Rule().padding(.top, Tok.s4)
-            HStack(spacing: Tok.s1) {
-                OpsButton("Edit", action: onEdit)
-                if confirmDelete {
-                    OpsButton("Confirm delete", kind: .danger) { model.delete(item.id) }
-                    OpsButton("Keep") { confirmDelete = false }
-                } else {
-                    OpsButton("Delete", kind: .danger) { confirmDelete = true }
-                }
-                Spacer()
-                StatusLine(model.status, isError: model.statusIsError)
-                OpsButton("Close", action: onClose)
-            }
-            .padding(.top, Tok.s3)
-            Text("Created \(Fmt.stamp(item.createdAt))   Updated \(Fmt.stamp(item.modifiedAt))")
-                .font(Type.hint()).foregroundStyle(Tok.text3).padding(.top, Tok.s2)
         }
-        .padding(Tok.s4)
-        .frame(maxWidth: cardWidth, alignment: .leading)
+        .padding(Tok.s3)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Tok.surface)
-        .overlay(Rectangle().stroke(Tok.border, lineWidth: 1))
+        .overlay(Rectangle().stroke(hover ? Tok.text3 : Tok.border, lineWidth: 1))
+        .onHover { hover = $0 }
     }
 }
 
@@ -227,37 +145,25 @@ struct CardFieldRow: View {
     private var showActions: Bool { Type.isPhone || hover }
 
     var body: some View {
-        Group {
-            if Type.isPhone {
-                // Field layout: label above, value and actions below.
-                VStack(alignment: .leading, spacing: Tok.s2) {
-                    Lbl(field.label)
-                    HStack(alignment: .firstTextBaseline, spacing: Tok.s3) {
-                        value.multilineTextAlignment(.leading)
-                        Spacer(minLength: Tok.s2)
-                        actions
-                    }
-                }
-            } else {
-                HStack(alignment: .firstTextBaseline, spacing: Tok.s3) {
-                    Lbl(field.label).frame(width: 150, alignment: .leading)
-                    Spacer(minLength: Tok.s2)
-                    value
-                    if showActions { actions.frame(width: actionsWidth, alignment: .trailing) }
-                    else { Color.clear.frame(width: actionsWidth, height: 1) }
-                }
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: Tok.s2) {
+                Lbl(field.label).lineLimit(1)
+                Spacer(minLength: Tok.s2)
+                if showActions { actions }
+            }
+            HStack(spacing: 0) {
+                value
+                Spacer(minLength: 0)
             }
         }
-        .padding(.vertical, Tok.s25)
-        .padding(.horizontal, Tok.s2)
+        .padding(.vertical, Tok.s2)
+        .padding(.horizontal, Tok.s1)
         .background(hover ? Tok.elevated : .clear)
         .contentShape(Rectangle())
         .onTapGesture { doCopy() }
         .onHover { hover = $0 }
         .onReceive(timer) { tick = $0 }
     }
-
-    private var actionsWidth: CGFloat { field.kind.isSecret && !isOTP ? 86 : 40 }
 
     private var actions: some View {
         HStack(spacing: Tok.s3) {
@@ -280,10 +186,10 @@ struct CardFieldRow: View {
                 Text("Invalid seed").font(Type.meta()).foregroundStyle(Tok.err)
             }
         } else if field.kind.isSecret && !revealed {
-            Text(String(repeating: "•", count: min(field.value.count, 14))).font(Type.data()).foregroundStyle(Tok.text2)
+            Text(String(repeating: "•", count: min(field.value.count, 14))).font(Type.dataBody()).foregroundStyle(Tok.text2)
         } else {
-            Text(field.value).font(field.kind.isMono ? Type.data() : Type.body()).foregroundStyle(Tok.text)
-                .multilineTextAlignment(.trailing).lineLimit(4)
+            Text(field.value).font(field.kind.isMono ? Type.dataBody() : Type.cell()).foregroundStyle(Tok.text)
+                .lineLimit(3).fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -311,7 +217,7 @@ struct CardEditor: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Tok.s4) {
                 HStack(spacing: Tok.s3) {
-                    Text(isNew ? "New card" : "Edit card").font(Type.title3()).foregroundStyle(Tok.text)
+                    Text(isNew ? "New credentials" : "Edit credentials").font(Type.title3()).foregroundStyle(Tok.text)
                     Spacer()
                     if !Type.isPhone { actions }
                 }
@@ -349,10 +255,19 @@ struct CardEditor: View {
         }
     }
 
+    @State private var confirmDelete = false
     private var actions: some View {
         HStack(spacing: Tok.s1) {
             OpsButton("Save", kind: .primary, disabled: draft.title.trimmingCharacters(in: .whitespaces).isEmpty) { save() }
             OpsButton("Cancel") { done() }
+            if !isNew {
+                if confirmDelete {
+                    OpsButton("Confirm delete", kind: .danger) { model.delete(draft.id); done() }
+                    OpsButton("Keep") { confirmDelete = false }
+                } else {
+                    OpsButton("Delete", kind: .danger) { confirmDelete = true }
+                }
+            }
         }
     }
 
@@ -362,7 +277,6 @@ struct CardEditor: View {
         it.fields = it.fields.filter { !$0.value.trimmingCharacters(in: .whitespaces).isEmpty }
         it.tags = tagsText.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         model.upsert(it)
-        model.selectedItemID = it.id
         done()
     }
 }

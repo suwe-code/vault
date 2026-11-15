@@ -23,20 +23,35 @@ struct CardsModule: View {
         return out
     }
 
+    /// Order is frozen while the page is open so a copy does not shuffle cards under the pointer.
+    @State private var frozenOrder: [UUID] = []
+
     private var visible: [VaultItem] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        let rank = Dictionary(uniqueKeysWithValues: frozenOrder.enumerated().map { ($1, $0) })
         return model.items
             .filter { filter == nil || $0.category == filter }
             .filter { q.isEmpty || $0.searchText.contains(q) }
             .sorted { a, b in
-                // Logins, then bank, then cards, then the rest. Pinned first within a type, then by title.
-                let order = ItemCategory.allCases
-                let ia = order.firstIndex(of: a.category) ?? 0, ib = order.firstIndex(of: b.category) ?? 0
-                if ia != ib { return ia < ib }
-                if a.favourite != b.favourite { return a.favourite }
-                return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
+                let ra = rank[a.id], rb = rank[b.id]
+                if let ra, let rb { return ra < rb }
+                if ra != nil || rb != nil { return ra != nil ? false : true }   // new cards go first
+                return Self.ranked(a, b)
             }
     }
+
+    /// Pinned first, then the most used (3+ copies), then login, bank, card, the rest; title within.
+    static func ranked(_ a: VaultItem, _ b: VaultItem) -> Bool {
+        if a.favourite != b.favourite { return a.favourite }
+        let ua = a.useCount >= 3 ? a.useCount : 0, ub = b.useCount >= 3 ? b.useCount : 0
+        if ua != ub { return ua > ub }
+        let order = ItemCategory.allCases
+        let ia = order.firstIndex(of: a.category) ?? 0, ib = order.firstIndex(of: b.category) ?? 0
+        if ia != ib { return ia < ib }
+        return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
+    }
+
+    private func refreshOrder() { frozenOrder = model.items.sorted(by: Self.ranked).map(\.id) }
 
     /// Every card is shown whole, small, in a scrolling grid. Values copy from here; nothing opens.
     private var grid: some View {
@@ -74,6 +89,9 @@ struct CardsModule: View {
             }
             StatusLine(model.status, isError: model.statusIsError)
         }
+        .onAppear(perform: refreshOrder)
+        .onChange(of: filter) { _, _ in refreshOrder() }
+        .onChange(of: model.items.map { "\($0.id)\($0.favourite)" }) { _, _ in refreshOrder() }
     }
 
     private func newCard() {
@@ -101,6 +119,10 @@ struct MiniCard: View {
                 Text(item.title).font(Type.bodyStrong()).foregroundStyle(Tok.text).lineLimit(1)
                 Spacer(minLength: Tok.s2)
                 Tag(item.category.label)
+                if hover || Type.isPhone || item.favourite {
+                    Button { model.togglePin(item.id) } label: { Lbl(item.favourite ? "Pinned" : "Pin", color: item.favourite ? Tok.text : Tok.text2) }
+                        .buttonStyle(.plain)
+                }
                 if hover || Type.isPhone {
                     Button(action: onEdit) { Lbl("Edit", color: Tok.text2) }.buttonStyle(.plain)
                 }
@@ -113,7 +135,7 @@ struct MiniCard: View {
             ForEach(filled) { f in
                 CardFieldRow(field: f, revealed: revealed.contains(f.id),
                              toggle: { if revealed.contains(f.id) { revealed.remove(f.id) } else { revealed.insert(f.id) }; model.touchActivity() },
-                             copy: { text, secret in model.copy(text, secret: secret) })
+                             copy: { text, secret in model.copy(text, secret: secret); model.noteUse(item.id) })
                 Rule(quiet: true)
             }
             if !item.notes.isEmpty {

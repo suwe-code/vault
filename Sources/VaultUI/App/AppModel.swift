@@ -232,6 +232,24 @@ public final class AppModel: ObservableObject {
         touchActivity()
     }
 
+    /// Pin or unpin without touching the edit timestamp semantics of a full edit.
+    public func togglePin(_ id: UUID) {
+        guard var v = vault, let i = v.payload.items.firstIndex(where: { $0.id == id }) else { return }
+        v.payload.items[i].favourite.toggle()
+        v.payload.items[i].touch()
+        vault = v
+        try? persist()
+        touchActivity()
+    }
+
+    /// Counts a copy from a card. Does not bump modifiedAt, so it never wins a merge over a real edit.
+    public func noteUse(_ id: UUID) {
+        guard var v = vault, let i = v.payload.items.firstIndex(where: { $0.id == id }) else { return }
+        v.payload.items[i].noteUse()
+        vault = v
+        try? persist()
+    }
+
     public func delete(_ id: UUID) {
         guard var v = vault, let i = v.payload.items.firstIndex(where: { $0.id == id }) else { return }
         v.payload.items[i].markDeleted()

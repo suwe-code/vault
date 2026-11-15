@@ -11,6 +11,9 @@ public struct VaultItem: Codable, Identifiable, Equatable, Hashable, Sendable {
     public var tags: [String]
     public var attachments: [Attachment]
     public var favourite: Bool
+    /// How often a value was copied from this card, and when last. Drives the "often used" ordering.
+    public var useCount: Int = 0
+    public var lastUsedAt: Date? = nil
     public var createdAt: Date
     public var modifiedAt: Date
     /// Tombstone. Deleted items are kept (without content) so a merge can propagate the deletion.
@@ -26,6 +29,26 @@ public struct VaultItem: Codable, Identifiable, Equatable, Hashable, Sendable {
     }
 
     public var isDeleted: Bool { deletedAt != nil }
+
+    public mutating func noteUse(_ date: Date = Date()) { useCount += 1; lastUsedAt = date.vaultRounded }
+
+    // Older files have no use fields; decode them as absent.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        category = try c.decode(ItemCategory.self, forKey: .category)
+        fields = try c.decode([VaultField].self, forKey: .fields)
+        notes = try c.decodeIfPresent(String.self, forKey: .notes) ?? ""
+        tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
+        attachments = try c.decodeIfPresent([Attachment].self, forKey: .attachments) ?? []
+        favourite = try c.decodeIfPresent(Bool.self, forKey: .favourite) ?? false
+        useCount = try c.decodeIfPresent(Int.self, forKey: .useCount) ?? 0
+        lastUsedAt = try c.decodeIfPresent(Date.self, forKey: .lastUsedAt)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        modifiedAt = try c.decode(Date.self, forKey: .modifiedAt)
+        deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
+    }
 
     /// Clears content and stamps the tombstone.
     public mutating func markDeleted(at date: Date = Date()) {

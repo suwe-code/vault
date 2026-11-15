@@ -9,10 +9,20 @@ struct CardsModule: View {
     var body: some View {
         if let draft = model.editingItem {
             CardEditor(model: model, original: draft, isNew: model.item(draft.id) == nil) { model.editingItem = nil }
-        } else if let item = model.item(model.selectedItemID) {
-            CardDetail(model: model, item: item, onEdit: { model.editingItem = item })
         } else {
-            list
+            ZStack {
+                list
+                if let item = model.item(model.selectedItemID) {
+                    // The card floats over the list. Click outside, Esc or CLOSE puts it away.
+                    Tok.bg.opacity(0.72)
+                        .contentShape(Rectangle())
+                        .onTapGesture { model.selectedItemID = nil }
+                    CardDetail(model: model, item: item, onEdit: { model.editingItem = item }, onClose: { model.selectedItemID = nil })
+                        .padding(Type.isPhone ? 0 : Tok.s4)
+                    Button("") { model.selectedItemID = nil }.keyboardShortcut(.cancelAction).frame(width: 0, height: 0).opacity(0)
+                }
+            }
+            .animation(.easeOut(duration: 0.12), value: model.selectedItemID)
         }
     }
 
@@ -132,34 +142,16 @@ struct CardDetail: View {
     @ObservedObject var model: AppModel
     let item: VaultItem
     let onEdit: () -> Void
+    let onClose: () -> Void
     @State private var revealed: Set<UUID> = []
     @State private var confirmDelete = false
 
     private var filled: [VaultField] { item.fields.filter { !$0.value.isEmpty } }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Tok.s4) {
-                HStack(spacing: Tok.s1) {
-                    OpsButton("Back") { model.selectedItemID = nil }
-                    Spacer()
-                    OpsButton("Edit", action: onEdit)
-                    if confirmDelete {
-                        OpsButton("Confirm delete", kind: .danger) { model.delete(item.id) }
-                        OpsButton("Keep") { confirmDelete = false }
-                    } else {
-                        OpsButton("Delete", kind: .danger) { confirmDelete = true }
-                    }
-                }
-                card
-                HStack {
-                    Text("Created \(Fmt.stamp(item.createdAt))   Updated \(Fmt.stamp(item.modifiedAt))").font(Type.hint()).foregroundStyle(Tok.text3)
-                    Spacer()
-                    StatusLine(model.status, isError: model.statusIsError)
-                }
-                .frame(maxWidth: cardWidth)
-            }
-        }
+        ScrollView(showsIndicators: false) { card }
+            .frame(maxWidth: cardWidth)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var cardWidth: CGFloat { Type.isPhone ? .infinity : 560 }
@@ -196,6 +188,22 @@ struct CardDetail: View {
                 HStack(spacing: Tok.s3) { ForEach(item.tags, id: \.self) { Tag($0) } }
                     .padding(.top, Tok.s3)
             }
+            Rule().padding(.top, Tok.s4)
+            HStack(spacing: Tok.s1) {
+                OpsButton("Edit", action: onEdit)
+                if confirmDelete {
+                    OpsButton("Confirm delete", kind: .danger) { model.delete(item.id) }
+                    OpsButton("Keep") { confirmDelete = false }
+                } else {
+                    OpsButton("Delete", kind: .danger) { confirmDelete = true }
+                }
+                Spacer()
+                StatusLine(model.status, isError: model.statusIsError)
+                OpsButton("Close", action: onClose)
+            }
+            .padding(.top, Tok.s3)
+            Text("Created \(Fmt.stamp(item.createdAt))   Updated \(Fmt.stamp(item.modifiedAt))")
+                .font(Type.hint()).foregroundStyle(Tok.text3).padding(.top, Tok.s2)
         }
         .padding(Tok.s4)
         .frame(maxWidth: cardWidth, alignment: .leading)

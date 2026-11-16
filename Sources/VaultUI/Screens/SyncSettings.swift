@@ -54,7 +54,7 @@ struct SyncModule: View {
         .fileExporter(isPresented: $exporting, document: exportDoc, contentType: .vaultFile, defaultFilename: model.exportFilename) { r in
             if case .success = r { model.setStatus("Saved") }
         }
-        .fileImporter(isPresented: $picking, allowedContentTypes: [.vaultFile, .data]) { r in
+        .fileImporter(isPresented: $picking, allowedContentTypes: [.vaultFile]) { r in
             if case .success(let url) = r { model.pendingImportURL = url; model.setStatus(nil) }
         }
         .onDisappear { if let u = shareURL { try? FileManager.default.removeItem(at: u) } }

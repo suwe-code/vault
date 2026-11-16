@@ -145,8 +145,16 @@ public final class AppModel: ObservableObject {
         autoLockTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(secs) * 1_000_000_000)
             guard !Task.isCancelled else { return }
-            self?.lock()
+            self?.autoLockExpired()
         }
+    }
+
+    /// Timer ran out: lock, then quit the app. iOS apps cannot quit themselves, so there it only locks.
+    private func autoLockExpired() {
+        lock()
+        #if canImport(AppKit)
+        NSApplication.shared.terminate(nil)
+        #endif
     }
 
     // MARK: Setup: new vault

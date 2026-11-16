@@ -92,13 +92,13 @@ struct SettingsModule: View {
                         OpsButton("Lock now") { model.lock() }
                     } else {
                         HStack(spacing: Tok.s3) {
-                            Lbl("Auto-lock after")
+                            Lbl("Close after")
                             Segmented([(60, "1 min"), (120, "2 min"), (300, "5 min"), (900, "15 min")], selection: $model.autoLockSeconds)
                             Spacer()
                             OpsButton("Lock now") { model.lock() }
                         }
                     }
-                    Text("Also locks when the app goes to the background.").font(Type.hint()).foregroundStyle(Tok.text3)
+                    Text(Type.isPhone ? "Also locks when the app goes to the background." : "The app quits when the timer runs out. It also locks when it goes to the background.").font(Type.hint()).foregroundStyle(Tok.text3)
                 }
 
                 Panel(title: "Password") {

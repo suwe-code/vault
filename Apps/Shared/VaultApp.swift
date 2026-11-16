@@ -20,7 +20,7 @@ struct VaultApp: App {
                 #endif
         }
         #if os(macOS)
-        .defaultSize(width: 760, height: 540)
+        .defaultSize(width: 660, height: 500)
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .newItem) {}

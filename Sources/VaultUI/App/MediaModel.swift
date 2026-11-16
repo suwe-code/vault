@@ -103,11 +103,16 @@ extension AppModel {
         touchActivity()
     }
 
-    /// Share sheet with a plain copy. Removed at lock.
-    public func shareMedia(_ entry: MediaEntry) {
+    /// Share sheet with a plain copy, or with a password-protected wrapper when `password` is set.
+    /// Both copies are removed at lock.
+    public func shareMedia(_ entry: MediaEntry, password: String? = nil) {
         do {
-            let url = try temporaryCopy(entry)
-            Share.present(url)
+            var url = try temporaryCopy(entry)
+            if let pw = password, !pw.isEmpty {
+                url = try Protect.wrap(url, typeID: entry.type, password: pw)
+                setStatus("Protected as \(url.lastPathComponent). Send the password separately")
+            }
+            Share.present(url) { [weak self] note in self?.setStatus(note) }
         } catch { setStatus(error.localizedDescription, error: true) }
         touchActivity()
     }
@@ -248,12 +253,42 @@ enum Thumb {
 
 // MARK: Share sheet
 
+/// System share sheet. Telegram appears through its share extension (enabled in
+/// System Settings › General › Login Items & Extensions › Sharing). WhatsApp's Mac app has
+/// no share extension, so a WhatsApp entry is added that copies the file and opens WhatsApp;
+/// paste into the chat with Cmd-V.
 enum Share {
-    static func present(_ url: URL) {
+    #if canImport(AppKit)
+    private final class Extra: NSObject, NSSharingServicePickerDelegate {
+        let note: (String) -> Void
+        init(note: @escaping (String) -> Void) { self.note = note }
+        func sharingServicePicker(_ picker: NSSharingServicePicker, sharingServicesForItems items: [Any], proposedSharingServices proposed: [NSSharingService]) -> [NSSharingService] {
+            var list = proposed
+            let wa = "/Applications/WhatsApp.app"
+            if FileManager.default.fileExists(atPath: wa), let url = items.first as? URL {
+                let icon = NSWorkspace.shared.icon(forFile: wa)
+                let svc = NSSharingService(title: "WhatsApp", image: icon, alternateImage: icon) { [note] in
+                    let pb = NSPasteboard.general
+                    pb.clearContents()
+                    pb.writeObjects([url as NSURL])
+                    NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: wa), configuration: NSWorkspace.OpenConfiguration())
+                    note("File copied. Paste it into the WhatsApp chat with Cmd-V")
+                }
+                list.insert(svc, at: 0)
+            }
+            return list
+        }
+    }
+    private static var extra: Extra?
+    #endif
+
+    static func present(_ url: URL, note: @escaping (String) -> Void) {
         #if canImport(AppKit)
         guard let window = NSApp.keyWindow, let view = window.contentView else { return }
         let p = window.convertPoint(fromScreen: NSEvent.mouseLocation)
         let picker = NSSharingServicePicker(items: [url])
+        let d = Extra(note: note); extra = d
+        picker.delegate = d
         picker.show(relativeTo: NSRect(x: p.x, y: p.y, width: 1, height: 1), of: view, preferredEdge: .minY)
         #else
         guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first,

@@ -67,10 +67,12 @@ public final class AppModel: ObservableObject {
         do {
             lockedFile = try store.load()
             phase = lockedFile == nil ? .welcome : .locked
+            NSLog("VAULT store: %@ exists=%d loaded=%d", store.fileURL.path, store.exists() ? 1 : 0, lockedFile == nil ? 0 : 1)
         } catch {
             lockedFile = nil
             phase = .welcome
-            setStatus("Vault file could not be read", error: true)
+            NSLog("VAULT store: %@ load failed: %@", store.fileURL.path, String(describing: error))
+            setStatus("Vault file could not be read: \(error.localizedDescription)", error: true)
         }
     }
 

@@ -1,0 +1,9 @@
+// Copy to Config/Local.xcconfig (or let ./setup.sh write it). Never committed.
+//
+// Your Apple team id. Xcode > Settings > Accounts > your Apple ID > the team row,
+// or developer.apple.com/account > Membership details. ./setup.sh finds it for you.
+DEVELOPMENT_TEAM = ABCDE12345
+
+// Reverse-DNS prefix that makes the app id yours. Keep it once chosen: the app's
+// data folder and keychain entries are tied to it. Example: com.alex
+VAULT_BUNDLE_PREFIX = com.yourname

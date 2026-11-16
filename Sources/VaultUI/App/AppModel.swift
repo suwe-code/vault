@@ -8,7 +8,7 @@ import UIKit
 import AppKit
 #endif
 
-public enum Module: Hashable { case cards, sync, settings }
+public enum Module: Hashable { case cards, files, sync, settings }
 
 public enum SetupStep: Hashable { case password, keyCard, biometrics, done }
 
@@ -42,15 +42,22 @@ public final class AppModel: ObservableObject {
     @AppStorage("autoLockSeconds") public var autoLockSeconds: Int = 120
     @AppStorage("deviceName") public var deviceName: String = AppModel.defaultDeviceName()
 
+    // Files module (device-local, encrypted; see MediaModel.swift)
+    @Published public var media: [MediaEntry] = []
+    var mediaKey: SymmetricKey?
+    public let mediaStore: MediaStore
+
     public let store: LocalStore
     private var lockedFile: VaultFile?
     private var autoLockTask: Task<Void, Never>?
     private var clipboardTask: Task<Void, Never>?
 
-    public init(store: LocalStore = LocalStore()) {
+    public init(store: LocalStore = LocalStore(), mediaStore: MediaStore? = nil) {
         self.store = store
+        self.mediaStore = mediaStore ?? MediaStore(directory: store.directory.appendingPathComponent("media", isDirectory: true))
         Fonts.register()
         reload()
+        sweepLeftovers()
     }
 
     public var vaultID: UUID? { vault?.header.vaultID ?? lockedFile?.header.vaultID }
@@ -126,16 +133,33 @@ public final class AppModel: ObservableObject {
         setStatus(nil)
         phase = .unlocked
         module = .cards
+        loadMedia()
         touchActivity()
     }
 
+    /// Locks and removes every plain copy made while open. Downloads that were already moved
+    /// away are named on the lock screen.
     public func lock() {
+        let missing = lockAndClean()
+        if !missing.isEmpty { setStatus(Self.missingMessage(missing), error: true) }
+    }
+
+    @discardableResult
+    private func lockAndClean() -> [String] {
         autoLockTask?.cancel()
         vault = nil
+        media = []
+        mediaKey = nil
         selectedItemID = nil
         editingItem = nil
         setStatus(nil)
         phase = lockedFile == nil ? .welcome : .locked
+        return cleanPlainCopies()
+    }
+
+    /// Cmd-Q or system quit: clean up first. Returns the downloads that were already gone.
+    public func prepareForTermination() -> [String] {
+        phase == .unlocked ? lockAndClean() : cleanPlainCopies()
     }
 
     public func touchActivity() {
@@ -151,9 +175,18 @@ public final class AppModel: ObservableObject {
 
     /// Timer ran out: lock, then quit the app. iOS apps cannot quit themselves, so there it only locks.
     private func autoLockExpired() {
-        lock()
+        let missing = lockAndClean()
         #if canImport(AppKit)
+        if !missing.isEmpty {
+            let a = NSAlert()
+            a.messageText = "VAULT is closing"
+            a.informativeText = Self.missingMessage(missing)
+            a.addButton(withTitle: "Close")
+            a.runModal()
+        }
         NSApplication.shared.terminate(nil)
+        #else
+        if !missing.isEmpty { setStatus(Self.missingMessage(missing), error: true) }
         #endif
     }
 
@@ -358,7 +391,10 @@ public final class AppModel: ObservableObject {
 
     public func wipeThisDevice() {
         if let id = vaultID { DeviceKeychain.wipe(vaultID: id) }
+        _ = cleanPlainCopies()
         store.wipe()
+        mediaStore.wipe()
+        media = []; mediaKey = nil
         vault = nil; lockedFile = nil
         phase = .welcome
     }

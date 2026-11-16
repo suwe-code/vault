@@ -28,6 +28,23 @@ func sample() -> OpenVault {
     return v
 }
 
+@MainActor
+func sampleMedia() -> [MediaEntry] {
+    // A flat colour JPEG stands in for a photo.
+    let img = NSImage(size: NSSize(width: 320, height: 200)); img.lockFocus()
+    NSColor(red: 0.35, green: 0.45, blue: 0.4, alpha: 1).setFill(); NSRect(x: 0, y: 0, width: 320, height: 200).fill()
+    NSColor(red: 0.8, green: 0.75, blue: 0.6, alpha: 1).setFill(); NSRect(x: 40, y: 30, width: 200, height: 110).fill()
+    img.unlockFocus()
+    let jpeg = NSBitmapImageRep(data: img.tiffRepresentation!)!.representation(using: .jpeg, properties: [:])
+    return [
+        MediaEntry(name: "passport-scan.jpg", type: "public.jpeg", size: 2_310_000, thumbnail: jpeg),
+        MediaEntry(name: "Aadhaar.pdf", type: "com.adobe.pdf", size: 412_000),
+        MediaEntry(name: "house-walkthrough.mov", type: "com.apple.quicktime-movie", size: 188_000_000),
+        MediaEntry(name: "keys-backup.zip", type: "public.zip-archive", size: 9_400),
+        MediaEntry(name: "IMG_4411.heic", type: "public.heic", size: 3_100_000, thumbnail: jpeg),
+    ]
+}
+
 struct Scenario { let name: String; let size: CGSize; let phone: Bool; let prepare: @MainActor () -> AnyView }
 
 @MainActor
@@ -53,6 +70,9 @@ func scenarios() -> [Scenario] {
         Scenario(name: "11-phone-cards", size: ph, phone: true, prepare: model { $0.loadForPreview(v) }),
         Scenario(name: "13b-mac-editor", size: mac, phone: false, prepare: model { $0.loadForPreview(v); $0.editingItem = v.payload.items[2] }),
         Scenario(name: "13b-phone-editor", size: CGSize(width: 390, height: 1100), phone: true, prepare: model { $0.loadForPreview(v); $0.editingItem = v.payload.items[2] }),
+        Scenario(name: "12-mac-files", size: CGSize(width: 660, height: 500), phone: false, prepare: model { $0.loadForPreview(v); $0.module = .files; $0.media = sampleMedia() }),
+        Scenario(name: "12-phone-files", size: ph, phone: true, prepare: model { $0.loadForPreview(v); $0.module = .files; $0.media = sampleMedia() }),
+        Scenario(name: "12-mac-files-empty", size: CGSize(width: 660, height: 500), phone: false, prepare: model { $0.loadForPreview(v); $0.module = .files }),
         Scenario(name: "14-mac-sync", size: mac, phone: false, prepare: model { $0.loadForPreview(v); $0.module = .sync }),
         Scenario(name: "14-phone-sync", size: ph, phone: true, prepare: model { $0.loadForPreview(v); $0.module = .sync }),
         Scenario(name: "15-mac-settings", size: CGSize(width: 1100, height: 1150), phone: false, prepare: model { $0.loadForPreview(v); $0.module = .settings }),

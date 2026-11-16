@@ -36,6 +36,9 @@ public enum Tok {
     public static let cardMin: CGFloat = 250
     /// Card height: header plus three field rows; more rows scroll inside the card.
     public static let cardHeight: CGFloat = 212
+    /// File tiles: preview on top, name and actions below.
+    public static let fileMin: CGFloat = 200
+    public static let fileHeight: CGFloat = 196
     public static let phoneGutter: CGFloat = 24
     public static let inputHeight: CGFloat = 34
     public static let buttonHeight: CGFloat = 18

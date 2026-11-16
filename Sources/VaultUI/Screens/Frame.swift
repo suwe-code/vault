@@ -68,6 +68,7 @@ struct Frame<Content: View>: View {
                 Text(Type.isPhone ? " " : footLeft).font(Type.tag()).foregroundStyle(Tok.text3).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
                 HStack(spacing: Type.isPhone ? Tok.s3 : Tok.s6) {
                     moduleButton(.cards, "CARDS", .cards)
+                    moduleButton(.files, "FILES", .files)
                     moduleButton(.sync, "SYNC", .sync)
                     moduleButton(.settings, "SETTINGS", .settings)
                 }
@@ -81,8 +82,9 @@ struct Frame<Content: View>: View {
     }
 
     private var footLeft: String {
-        let n = model.items.count
-        return n == 0 ? "No cards yet" : "\(n) card\(n == 1 ? "" : "s")"
+        let n = model.items.count, m = model.media.count
+        let cards = n == 0 ? "No cards yet" : "\(n) card\(n == 1 ? "" : "s")"
+        return m == 0 ? cards : "\(cards) · \(m) file\(m == 1 ? "" : "s")"
     }
     private var footRight: String {
         if let d = model.lastSavedAt { return "Saved \(Fmt.stamp(d))" }
@@ -176,6 +178,7 @@ struct UnlockedShell: View {
             Group {
                 switch model.module {
                 case .cards: CardsModule(model: model)
+                case .files: FilesModule(model: model)
                 case .sync: SyncModule(model: model)
                 case .settings: SettingsModule(model: model)
                 }

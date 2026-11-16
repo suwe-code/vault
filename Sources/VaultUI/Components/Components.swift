@@ -345,7 +345,7 @@ public struct StatusLine: View {
 
 // MARK: Module icons (section 08): 24px grid, 1.5px stroke, square corners, hollow at rest, filled when active.
 
-public enum ModuleIcon { case cards, sync, settings }
+public enum ModuleIcon { case cards, files, sync, settings }
 
 public struct IconView: View {
     let icon: ModuleIcon
@@ -372,6 +372,16 @@ public struct IconView: View {
                     ctx.stroke(rect(3.75, 6.75, 12.5, 8.5), with: .color(color), style: stroke)
                     ctx.fill(rect(7, 10, 14, 10), with: .color(Tok.bg))
                     ctx.stroke(rect(7.75, 10.75, 12.5, 8.5), with: .color(color), style: stroke)
+                }
+            case .files:
+                // Folder: tab above a body
+                if active {
+                    ctx.fill(rect(3, 5, 8, 4), with: .color(color))
+                    ctx.fill(rect(3, 8, 18, 11), with: .color(color))
+                } else {
+                    ctx.stroke(rect(3.75, 5.75, 6.5, 3), with: .color(color), style: stroke)
+                    ctx.fill(rect(3, 8, 18, 11), with: .color(Tok.bg))
+                    ctx.stroke(rect(3.75, 8.75, 16.5, 9.5), with: .color(color), style: stroke)
                 }
             case .sync:
                 // Two opposing arrows

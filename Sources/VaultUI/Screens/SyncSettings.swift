@@ -101,6 +101,19 @@ struct SettingsModule: View {
                     Text(Type.isPhone ? "Also locks when the app goes to the background." : "The app quits when the timer runs out. It also locks when it goes to the background.").font(Type.hint()).foregroundStyle(Tok.text3)
                 }
 
+                #if os(macOS)
+                Panel(title: "Files") {
+                    HStack(spacing: Tok.s3) {
+                        Lbl("Download folder")
+                        Text(model.downloadFolderName).font(Type.data()).foregroundStyle(Tok.text2).lineLimit(1).truncationMode(.middle)
+                        Spacer()
+                        OpsButton("Choose folder") { model.chooseDownloadFolder() }
+                    }
+                    Text("Downloaded and opened copies are deleted when the vault locks or the app closes. Files themselves stay encrypted on this Mac and are not part of the .vault export.")
+                        .font(Type.hint()).foregroundStyle(Tok.text3)
+                }
+                #endif
+
                 Panel(title: "Password") {
                     OpsField("Current", text: $current, style: .secure)
                     OpsField("New", text: $newPw, style: .secure, hint: "At least 12 characters")

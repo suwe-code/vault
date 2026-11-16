@@ -5,9 +5,30 @@ import VaultCore
 import AppKit
 #endif
 
+#if os(macOS)
+/// Cmd-Q and system shutdown: remove plain copies before the process ends.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    var onTerminate: (() -> [String])?
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let missing = onTerminate?() ?? []
+        if !missing.isEmpty {
+            let a = NSAlert()
+            a.messageText = "VAULT is closing"
+            a.informativeText = AppModel.missingMessage(missing)
+            a.addButton(withTitle: "Close")
+            a.runModal()
+        }
+        return .terminateNow
+    }
+}
+#endif
+
 @main
 struct VaultApp: App {
     @StateObject private var model = AppModel()
+    #if os(macOS)
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    #endif
 
     init() { Self.runKeychainSelfTestIfRequested() }
 
@@ -16,7 +37,7 @@ struct VaultApp: App {
             RootView(model: model)
                 #if os(macOS)
                 .frame(minWidth: 560, minHeight: 420)
-                .onAppear { hardenWindows() }
+                .onAppear { hardenWindows(); delegate.onTerminate = { model.prepareForTermination() } }
                 #endif
         }
         #if os(macOS)

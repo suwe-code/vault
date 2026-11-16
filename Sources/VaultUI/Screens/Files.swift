@@ -128,6 +128,7 @@ struct FileTile: View {
     @State private var hover = false
     @State private var confirmDelete = false
     @State private var sharing = false
+    @State private var downloading = false
     @State private var sharePassword = ""
 
     private var typeLabel: String {
@@ -182,9 +183,10 @@ struct FileTile: View {
                 IconButton("arrow.up.right.square", help: "Open", dim: !hover) { model.openMedia(entry) }
             }
             IconButton("square.and.arrow.up", help: "Share", dim: !hover) { sharing = true }
-                .popover(isPresented: $sharing, arrowEdge: .bottom) { sharePopover }
+                .popover(isPresented: $sharing, arrowEdge: .bottom) { choice(verb: "Share") { share($0) } }
             #if os(macOS)
-            IconButton("arrow.down.to.line", help: "Download to folder", dim: !hover) { model.downloadMedia(entry) }
+            IconButton("arrow.down.to.line", help: "Download to folder", dim: !hover) { downloading = true }
+                .popover(isPresented: $downloading, arrowEdge: .bottom) { choice(verb: "Download") { download($0) } }
             #endif
             if confirmDelete {
                 Button { model.deleteMedia(entry.id) } label: { Lbl("Confirm", color: Tok.err).padding(.horizontal, Tok.s1) }.buttonStyle(.plain)
@@ -194,15 +196,15 @@ struct FileTile: View {
         }
     }
 
-    /// Share as is, or set a password the recipient will need.
-    private var sharePopover: some View {
+    /// As is, or wrapped in a password. Used by both Share and Download.
+    private func choice(verb: String, go: @escaping (String?) -> Void) -> some View {
         VStack(alignment: .leading, spacing: Tok.s3) {
             Text(entry.name).font(Type.bodyStrong()).foregroundStyle(Tok.text).lineLimit(1).truncationMode(.middle)
-            OpsButton("Share as is", kind: .primary) { share(nil) }
+            OpsButton("\(verb) as is", kind: .primary) { go(nil) }
             Rule(quiet: true)
             Lbl("Or protect with a password")
-            OpsField("", text: $sharePassword, style: .secure, placeholder: "Password for the recipient", onSubmit: { share(sharePassword) })
-            OpsButton("Share protected", disabled: sharePassword.isEmpty) { share(sharePassword) }
+            OpsField("", text: $sharePassword, style: .secure, placeholder: "Password to open it", onSubmit: { go(sharePassword) })
+            OpsButton("\(verb) protected", disabled: sharePassword.isEmpty) { go(sharePassword) }
             Text(protectHint).font(Type.hint()).foregroundStyle(Tok.text3).fixedSize(horizontal: false, vertical: true)
         }
         .padding(Tok.s4)
@@ -213,9 +215,9 @@ struct FileTile: View {
     private var protectHint: String {
         let t = UTType(entry.type)
         if t?.conforms(to: .pdf) == true || t?.conforms(to: .image) == true {
-            return "Sent as an encrypted PDF. Opens in any PDF viewer with the password."
+            return "Becomes an encrypted PDF. Opens in any PDF viewer with the password."
         }
-        return "Sent as a password-protected ZIP. Mac and Windows open it with The Unarchiver, Keka or 7-Zip; phones need a zip app. Tell the recipient the password by another channel."
+        return "Becomes a password-protected ZIP. Mac and Windows open it with The Unarchiver, Keka or 7-Zip; phones need a zip app. Pass the password on by another channel."
     }
 
     private func share(_ pw: String?) {
@@ -223,6 +225,13 @@ struct FileTile: View {
         let password = pw
         sharePassword = ""
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { model.shareMedia(entry, password: password) }
+    }
+
+    private func download(_ pw: String?) {
+        downloading = false
+        let password = pw
+        sharePassword = ""
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { model.downloadMedia(entry, password: password) }
     }
 }
 

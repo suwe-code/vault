@@ -154,18 +154,30 @@ extension AppModel {
     }
 
     /// Decrypts to the download folder and remembers the path so it can be removed at lock.
-    public func downloadMedia(_ entry: MediaEntry) {
+    /// With `password`, the file is wrapped first (encrypted PDF or protected ZIP) and only the
+    /// wrapped file lands in the folder.
+    public func downloadMedia(_ entry: MediaEntry, password: String? = nil) {
         guard let key = mediaKey else { return }
         guard let folder = downloadFolder ?? chooseDownloadFolder() else { return }
         let accessed = folder.startAccessingSecurityScopedResource()
         defer { if accessed { folder.stopAccessingSecurityScopedResource() } }
         do {
-            let data = try mediaStore.read(entry, key: key)
-            let url = Self.uniqueURL(in: folder, name: entry.name)
-            try data.write(to: url, options: [.atomic])
+            let url: URL
+            if let pw = password, !pw.isEmpty {
+                let plain = try temporaryCopy(entry)
+                let wrapped = try Protect.wrap(plain, typeID: entry.type, password: pw)
+                try? FileManager.default.removeItem(at: plain)
+                url = Self.uniqueURL(in: folder, name: wrapped.lastPathComponent)
+                try FileManager.default.copyItem(at: wrapped, to: url)
+                try? FileManager.default.removeItem(at: wrapped)
+            } else {
+                let data = try mediaStore.read(entry, key: key)
+                url = Self.uniqueURL(in: folder, name: entry.name)
+                try data.write(to: url, options: [.atomic])
+            }
             var list = trackedDownloads; list.append(url.lastPathComponent); trackedDownloads = list
-            setStatus("Downloaded to \(folder.lastPathComponent). Deleted at lock")
-        } catch { setStatus("Could not write to \(folder.lastPathComponent)", error: true) }
+            setStatus("\(password == nil ? "Downloaded" : "Protected and downloaded") to \(folder.lastPathComponent) as \(url.lastPathComponent). Deleted at lock")
+        } catch { setStatus(error is Protect.Failure ? error.localizedDescription : "Could not write to \(folder.lastPathComponent)", error: true) }
         touchActivity()
     }
 

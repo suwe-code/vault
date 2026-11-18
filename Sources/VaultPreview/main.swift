@@ -23,8 +23,10 @@ func sample() -> OpenVault {
     for (i, s) in ["https://mail.google.com", "suwethaparker@gmail.com", "correct-horse-battery", "JBSWY3DPEHPK3PXP", "", "+91 98450 00000", "8821 0931 7712 5540"].enumerated() { gmail.fields[i].value = s }
     var pan = VaultItem(title: "PAN", category: .identity, fields: Templates.fields(for: .identity))
     for (i, s) in ["PAN card", "ABCDE1234F", "SUWETHA PARKER", "1996-04-12"].enumerated() { pan.fields[i].value = s }
+    var amma = VaultItem(title: "Amma", category: .person, fields: Templates.fields(for: .person))
+    for (i, s) in ["Lakshmi Parker", "Mother", "+91 98400 11111", "", "lakshmi@example.com", "1965-08-02", "12 Lake View Road, Chennai 600028", "B+", "1234 5678 9012", "ABCDE5678G"].enumerated() { amma.fields[i].value = s }
     let note = VaultItem(title: "Locker", category: .note, notes: "Locker 214 at the Indiranagar branch. Key in the desk drawer.")
-    v.payload.items = [bank, card, gmail, pan, note]
+    v.payload.items = [bank, card, gmail, pan, amma, note]
     return v
 }
 

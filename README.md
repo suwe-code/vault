@@ -52,7 +52,8 @@ open it on the phone, and type your password and the key card once.
 
 ## Using it
 
-- **CARDS** holds logins, bank details, cards, identity documents and notes. Click a row to
+- **CARDS** holds logins, bank details, cards, identity documents, people (family and
+  contacts with their phone, address and document numbers) and notes. Click a row to
   copy it. Secrets clear from the clipboard after 30 seconds.
 - **FILES** holds photos, scans, PDFs and any other file. Drop files in or use Add files.
   Each one is encrypted on disk. Open, share, or download a copy while the vault is open.

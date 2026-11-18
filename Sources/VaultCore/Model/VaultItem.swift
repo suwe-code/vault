@@ -113,7 +113,7 @@ public enum FieldKind: String, Codable, CaseIterable, Sendable {
 }
 
 public enum ItemCategory: String, Codable, CaseIterable, Sendable {
-    case login, bank, card, identity, note, custom   // display order
+    case login, bank, card, identity, person, note, custom   // display order
 
     public var label: String {
         switch self {
@@ -121,9 +121,16 @@ public enum ItemCategory: String, Codable, CaseIterable, Sendable {
         case .card: return "CARD"
         case .login: return "LOGIN"
         case .identity: return "IDENTITY"
+        case .person: return "PEOPLE"
         case .note: return "NOTE"
         case .custom: return "CUSTOM"
         }
+    }
+
+    /// A file written by a newer build may carry a category this build does not know. Keep the card.
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = ItemCategory(rawValue: raw) ?? .custom
     }
 }
 
@@ -171,6 +178,16 @@ public enum Templates {
                 .init(label: "Document"), .init(label: "Number", kind: .number),
                 .init(label: "Name as printed"), .init(label: "Date of birth", kind: .date),
                 .init(label: "Issued", kind: .date), .init(label: "Expires", kind: .date),
+            ]
+        case .person:
+            return [
+                .init(label: "Full name"), .init(label: "Relation"),
+                .init(label: "Phone", kind: .phone), .init(label: "Alternate phone", kind: .phone),
+                .init(label: "Email", kind: .email), .init(label: "Date of birth", kind: .date),
+                .init(label: "Address"), .init(label: "Blood group"),
+                .init(label: "Aadhaar", kind: .number), .init(label: "PAN", kind: .number),
+                .init(label: "Passport", kind: .number), .init(label: "Passport expires", kind: .date),
+                .init(label: "Emergency contact", kind: .phone),
             ]
         case .note:
             return []
